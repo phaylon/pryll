@@ -39,6 +39,10 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            || expression T_op_diff expression
+                action => ast_binop
+            || expression T_op_equal expression
+                action => ast_binop
             || expression T_op_and_high expression
                 action => ast_binop
             || expression T_op_or_high expression
@@ -53,6 +57,9 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_binop
             || expression T_op_or_low expression
                 action => ast_binop
+
+        op_diff ::= op_diff_tail+
+        op_diff_tail ::= T_op_diff expression
 
         assignable ::= variable
 
@@ -108,10 +115,12 @@ my @_operators = (
     ['or_low',      'or'],
     ['and_low',     'and'],
     ['not_low',     'not'],
-    ['assign',      '='],
     ['assign_sc',   '+=', '-=', '*=', '/=', '~=', '||=', '//=', '&&='],
     ['or_high',     '||', '//'],
     ['and_high',    '&&'],
+    ['equal',       '==', '!=', 'eq', 'ne', '<=>', 'cmp', '~~'],
+    ['assign',      '='],
+    ['diff',        '>=', '<=', '>', '<', 'gt', 'lt', 'ge', 'le'],
 );
 
 my @_tokens = (
@@ -154,6 +163,7 @@ sub _tokens_for {
 
 do {
     package Pryll::Parser::Actions;
+    use Safe::Isa;
 
     sub ast_number {
         my ($data, $token) = @_;
@@ -221,9 +231,20 @@ do {
         );
     }
 
+    my %_seqop_category => (
+        (map { ($_, 'num') } '>', '<', '>=', '<='),
+        (map { ($_, 'str') } 'gt', 'lt', 'ge', 'le'),
+    );
+
     sub ast_document {
         my ($data, @parts) = @_;
         return Document->$_new_ast(parts => \@parts);
+    }
+
+    sub ast_test {
+        my ($data, @rest) = @_;
+        use Data::Dump qw( pp );        
+        return [@rest];
     }
 };
 

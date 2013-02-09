@@ -97,7 +97,13 @@ test_all('operators', $_test_ok,
             ),
         ];
     }   ['low or', 'or'], ['low and', 'and'],
-        ['high or', '||'], ['defined or', '//'], ['high and', '&&']),
+        ['high or', '||'], ['defined or', '//'],
+        ['high and', '&&'],
+        ['num lt', '<'], ['num gt', '>'],
+        ['num le', '<='], ['num ge', '>='],
+        ['str lt', 'lt'], ['str gt', 'gt'],
+        ['str le', 'le'], ['str ge', 'ge'],
+    ),
     (map {
         my ($name, $op) = @$_;
         ["assign $name", "\$x $op= 23",
@@ -126,7 +132,8 @@ test_all('operators', $_test_ok,
         ];
     }   [add => '+'], [sub => '-'], [mul => '*'],
         [div => '/'], [concat => '~'], [or => '||'],
-        [defor => '//'], [and => '&&']),
+        [defor => '//'], [and => '&&'],
+    ),
 );
 
 test_all('operator precedence', $_test_ok,
