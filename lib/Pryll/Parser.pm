@@ -39,6 +39,8 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            || expression T_op_math_low expression
+                action => ast_binop
             || expression T_op_concat expression
                 action => ast_binop
             || T_op_not_high expression
@@ -128,6 +130,7 @@ my @_operators = (
     ['assign',      '='],
     ['concat',      '~'],
     ['not_high',    '!'],
+    ['math_low',    '+', '-'],
 );
 
 my @_tokens = (
