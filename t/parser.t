@@ -35,7 +35,7 @@ sub cb_unop {
         'AST::Operator::Unary',
         cb_all(
             cb_attr(symbol  => cb_is($symbol)),
-            cb_attr(right   => $right),
+            cb_attr(operand => $right),
         ),
     );
 }
@@ -86,6 +86,12 @@ test_all('operators', $_test_ok,
             ),
         ),
     ],
+    (map {
+        my ($name, $op) = @$_;
+        [$name, "\$n$op", cb_unop($op, cb_lex_var('n'))];
+    }   ['inc', '++'],
+        ['dec', '--'],
+    ),
     (map {
         my ($name, $op) = @$_;
         [$name, "$op 17", cb_unop($op, cb_num(17))];
@@ -246,6 +252,12 @@ test_all('operator precedence', $_test_ok,
                 cb_lex_var('c'),
                 cb_lex_var('d'),
             ),
+        ),
+    ],
+    ['stepping vs. high math', '$x++ * $y--',
+        cb_binop('*',
+            cb_unop('++', cb_lex_var('x')),
+            cb_unop('--', cb_lex_var('y')),
         ),
     ],
 );

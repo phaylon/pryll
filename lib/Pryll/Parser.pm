@@ -39,6 +39,9 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            || assignable T_op_step
+                action => ast_unop_post
+                assoc => left
             || expression T_op_math_high expression
                 action => ast_binop
             || expression T_op_math_low expression
@@ -46,7 +49,7 @@ my $_grammar = Marpa::R2::Grammar->new({
             || expression T_op_concat expression
                 action => ast_binop
             || T_op_not_high expression
-                action => ast_unop
+                action => ast_unop_pre
                 assoc => right
             || expression T_op_diff expression
                 action => ast_binop
@@ -60,7 +63,7 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_binop
                 assoc => right
             || T_op_not_low expression
-                action => ast_unop
+                action => ast_unop_pre
                 assoc => right
             || expression T_op_and_low expression
                 action => ast_binop
@@ -129,6 +132,7 @@ my @_operators = (
     ['and_high',    '&&'],
     ['equal',       '==', '!=', 'eq', 'ne', '<=>', 'cmp', '~~'],
     ['diff',        '>=', '<=', '>', '<', 'gt', 'lt', 'ge', 'le'],
+    ['step',        '++', '--'],
     ['assign',      '='],
     ['concat',      '~'],
     ['not_high',    '!'],
@@ -234,12 +238,17 @@ do {
         );
     }
 
-    sub ast_unop {
+    sub ast_unop_post {
+        my ($data, $left, $op) = @_;
+        return ast_unop_pre($data, $op, $left);
+    }
+
+    sub ast_unop_pre {
         my ($data, $op, $right) = @_;
         my ($type, $value, $location) = @$op;
         return Operator::Unary->$_new_ast(
             symbol      => $value,
-            right       => $right,
+            operand     => $right,
             location    => $location,
         );
     }

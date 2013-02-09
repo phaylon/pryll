@@ -6,6 +6,6 @@ use Moo;
 with 'Pryll::HasLocation';
 
 has symbol  => (is => 'ro', required => 1);
-has right   => (is => 'ro', required => 1);
+has operand => (is => 'ro', required => 1);
 
 1;
