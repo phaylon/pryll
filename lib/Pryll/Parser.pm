@@ -26,7 +26,6 @@ my $_inflate = sub {
 };
 
 my $_grammar = Marpa::R2::Grammar->new({
-#    start => 'document',
     actions => 'Pryll::Parser::Actions',
     source => \q{
 
@@ -40,6 +39,10 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            || expression T_op_and_high expression
+                action => ast_binop
+            || expression T_op_or_high expression
+                action => ast_binop
             || assignable op_assign expression
                 action => ast_binop
                 assoc => right
@@ -106,7 +109,9 @@ my @_operators = (
     ['and_low',     'and'],
     ['not_low',     'not'],
     ['assign',      '='],
-    ['assign_sc',   '+=', '-=', '*=', '/=', '~='],
+    ['assign_sc',   '+=', '-=', '*=', '/=', '~=', '||=', '//=', '&&='],
+    ['or_high',     '||', '//'],
+    ['and_high',    '&&'],
 );
 
 my @_tokens = (
@@ -176,6 +181,9 @@ do {
         '*='    => ['=', '*'],
         '/='    => ['=', '/'],
         '~='    => ['=', '~'],
+        '||='   => ['=', '||'],
+        '//='   => ['=', '//'],
+        '&&='   => ['=', '&&'],
     );
 
     sub ast_binop {
