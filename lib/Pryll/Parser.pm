@@ -40,36 +40,28 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            || assignable T_op_assign expression
+                action => ast_binop
+                assoc => right
+            || T_op_not_low expression
+                action => ast_unop
+                assoc => right
             || expression T_op_and_low expression
                 action => ast_binop
             || expression T_op_or_low expression
                 action => ast_binop
 
+        assignable ::= variable
+
         atom ::=
                number       action => ast_number
-            || T_lex_var    action => ast_lex_var
+            |  T_lex_var    action => ast_lex_var
+
+        variable ::= T_lex_var action => ast_lex_var
 
         number ::= T_integer | T_float
 
     },
-#    rules => $_inflate->(
-#        ['document', ['document_part'],
-#            min         => 0,
-#            separator   => 'T_stmt_sep',
-#            action      => 'ast_document',
-#        ],
-#        ['document_part', ['expression']],
-#        ['expression', ['atom']],
-#
-#        ['atom', ['number'],
-#            action      => 'ast_number',
-#        ],
-#        ['atom', ['T_lex_var'],
-#            action      => 'ast_lex_var',
-#        ],
-#        ['number', ['T_integer']],
-#        ['number', ['T_float']],
-#    ),
 });
 
 $_grammar->precompute;
@@ -108,8 +100,10 @@ my $_rx_int         = qr{ [0-9]+ (?: _ [0-9]+)* }x;
 my $_rx_bareword    = qr{ [a-z_] [a-z0-9_]* }ix;
 
 my @_operators = (
-    ['or_low', 'or'],
-    ['and_low', 'and'],
+    ['or_low',      'or'],
+    ['and_low',     'and'],
+    ['not_low',     'not'],
+    ['assign',      '='],
 );
 
 my @_tokens = (
@@ -184,15 +178,13 @@ do {
         );
     }
 
-    sub ast_binop_left {
-        my ($data, $left, $op, $right) = @_;
+    sub ast_unop {
+        my ($data, $op, $right) = @_;
         my ($type, $value, $location) = @$op;
-        return Operator::Binary->$_new_ast(
+        return Operator::Unary->$_new_ast(
             symbol      => $value,
-            left        => $left,
             right       => $right,
             location    => $location,
-            assoc       => 'left',
         );
     }
 

@@ -80,6 +80,8 @@ sub test_all {
 
 sub grouped {
     my ($title, $code) = @_;
+    return $code->()
+        if $ENV{TEST_FLAT};
     Test::More::note($title);
     Test::More::subtest($title, sub {
         $code->();

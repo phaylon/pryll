@@ -29,6 +29,17 @@ sub cb_binop {
     );
 }
 
+sub cb_unop {
+    my ($symbol, $right) = @_;
+    return cb_isa(
+        'AST::Operator::Unary',
+        cb_all(
+            cb_attr(symbol  => cb_is($symbol)),
+            cb_attr(right   => $right),
+        ),
+    );
+}
+
 sub cb_num {
     return cb_isa(
         'AST::Number',
@@ -65,13 +76,58 @@ test_all('variables', $_test_ok,
 );
 
 test_all('operators', $_test_ok,
-    ['low or', '23 or 17',
-        cb_binop('or', cb_num(23), cb_num(17)),
-    ],
-    ['low_or (assoc)', '23 or 17 or 42',
+    ['low or', '23 or 17', cb_binop('or', cb_num(23), cb_num(17))],
+    ['low or (assoc)', '23 or 17 or 42',
         cb_binop('or',
             cb_binop('or', cb_num(23), cb_num(17)),
             cb_num(42),
+        ),
+    ],
+    ['low and', '23 and 17', cb_binop('and', cb_num(23), cb_num(17))],
+    ['low and (assoc)', '23 and 17 and 42',
+        cb_binop('and',
+            cb_binop('and', cb_num(23), cb_num(17)),
+            cb_num(42),
+        ),
+    ],
+    ['low not', 'not 17', cb_unop('not', cb_num(17))],
+    ['assign', '$x = 23', cb_binop('=', cb_lex_var('x'), cb_num(23))],
+    ['assign (assoc)', '$x = $y = 23',
+        cb_binop('=',
+            cb_lex_var('x'),
+            cb_binop('=',
+                cb_lex_var('y'),
+                cb_num(23),
+            ),
+        ),
+    ],
+);
+
+test_all('operator precedence', $_test_ok,
+    ['low and vs. low or', '23 and 17 or 45',
+        cb_binop('or',
+            cb_binop('and', cb_num(23), cb_num(17)),
+            cb_num(45),
+        ),
+    ],
+    ['low or vs. low and', '23 or 17 and 45',
+        cb_binop('or',
+            cb_num(23),
+            cb_binop('and', cb_num(17), cb_num(45)),
+        ),
+    ],
+    ['low and vs. low not', 'not $x and not $y',
+        cb_binop('and',
+            cb_unop('not', cb_lex_var('x')),
+            cb_unop('not', cb_lex_var('y')),
+        ),
+    ],
+    ['low not vs. assign', 'not $x = $y',
+        cb_unop('not',
+            cb_binop('=',
+                cb_lex_var('x'),
+                cb_lex_var('y'),
+            ),
         ),
     ],
 );
