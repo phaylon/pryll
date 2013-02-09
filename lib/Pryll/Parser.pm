@@ -40,7 +40,7 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
-            || assignable T_op_assign expression
+            || assignable op_assign expression
                 action => ast_binop
                 assoc => right
             || T_op_not_low expression
@@ -52,6 +52,8 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_binop
 
         assignable ::= variable
+
+        op_assign ::= T_op_assign | T_op_assign_sc
 
         atom ::=
                number       action => ast_number
@@ -104,6 +106,7 @@ my @_operators = (
     ['and_low',     'and'],
     ['not_low',     'not'],
     ['assign',      '='],
+    ['assign_sc',   '+=', '-=', '*=', '/=', '~='],
 );
 
 my @_tokens = (
@@ -167,9 +170,31 @@ do {
         );
     }
 
+    my %_binop_shortcut = (
+        '+='    => ['=', '+'],
+        '-='    => ['=', '-'],
+        '*='    => ['=', '*'],
+        '/='    => ['=', '/'],
+        '~='    => ['=', '~'],
+    );
+
     sub ast_binop {
         my ($data, $left, $op, $right) = @_;
         my ($type, $value, $location) = @$op;
+        if (defined( my $newop = $_binop_shortcut{$value} )) {
+            my ($outer, $inner) = @$newop;
+            return Operator::Binary->$_new_ast(
+                symbol      => $outer,
+                left        => $left,
+                location    => $location,
+                right       => Operator::Binary->$_new_ast(
+                    symbol      => $inner,
+                    left        => $left,
+                    location    => $location,
+                    right       => $right,
+                ),
+            );
+        }
         return Operator::Binary->$_new_ast(
             symbol      => $value,
             left        => $left,
