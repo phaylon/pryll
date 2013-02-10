@@ -327,4 +327,16 @@ test_all('operator precedence', $_test_ok,
     ],
 );
 
+test_all('groupings', $_test_ok,
+    ['precedence', '(23 and 17) || 55',
+        cb_binop('||',
+            cb_binop('and',
+                cb_num(23),
+                cb_num(17),
+            ),
+            cb_num(55),
+        ),
+    ],
+);
+
 done_testing;

@@ -86,8 +86,12 @@ my $_grammar = Marpa::R2::Grammar->new({
         op_assign ::= T_op_assign | T_op_assign_sc
 
         atom ::=
-               number       action => ast_number
-            |  T_lex_var    action => ast_lex_var
+               number       
+                action => ast_number
+            |  T_lex_var    
+                action => ast_lex_var
+            |  T_op_par_left expression T_op_par_right
+                action => ast_grouping
 
         variable ::= T_lex_var action => ast_lex_var
         bareword ::= T_bareword action => ast_bareword
@@ -290,6 +294,11 @@ do {
             symbol      => $value,
             location    => $location,
         );
+    }
+
+    sub ast_grouping {
+        my ($data, $l_par, $expr, $r_par) = @_;
+        return $expr;
     }
 
     sub ast_document {
