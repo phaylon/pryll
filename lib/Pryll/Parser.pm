@@ -83,7 +83,7 @@ my $_grammar = Marpa::R2::Grammar->new({
             separator => T_op_list_sep
             action => ast_list
 
-        argument_item ::= list_item | named_item
+        argument_item ::= named_item | list_item
 
         list_item ::= expression | slice_list
         named_item ::= named_val | slice_named
@@ -93,13 +93,16 @@ my $_grammar = Marpa::R2::Grammar->new({
         slice_named ::= T_op_slice_named expression
             action => ast_slice_named
 
-        named_val ::= T_val_name expression action => ast_named_val
+        named_val ::= expression T_op_colon expression
+            action => ast_named_val
 
         op_assign ::= T_op_assign | T_op_assign_sc
 
         atom ::=
                number       
                 action => ast_number
+            |  T_bareword
+                action => ast_bareword
             |  T_lex_var    
                 action => ast_lex_var
             |  T_op_par_left expression T_op_par_right
@@ -121,8 +124,12 @@ sub parse {
         unless length $source->body;
     my $recog = Marpa::R2::Recognizer->new({ grammar => $_grammar });
     my $tokens = $self->_tokens_for($source);
+#    use Data::Dump qw( pp );
     for my $token (@$tokens) {
-        $recog->read('T_' . $token->[0], $token);
+        my $ok = $recog->read('T_' . $token->[0], $token);
+#        print "TOKEN " . $token->[0] . ' ' . pp($ok) . "\n";
+        die "Unable to parse " . $token->[0]
+            unless defined $ok;
     }
     my $value = $recog->value;
     die "Unable to parse"
@@ -169,10 +176,11 @@ my @_operators = (
     ['par_right',   ')'],
     ['slice_list',  '@'],
     ['slice_named', '%'],
+    ['colon',       ':'],
 );
 
 my @_tokens = (
-    ['val_name',    qr{ $_rx_bareword : }x],
+#    ['val_name',    qr{ $_rx_bareword : }x],
     (map { [$_, qr{\Q$_\E}] } @_keywords),
     (map {
         my ($name, @symbols) = @$_;
@@ -220,17 +228,25 @@ do {
     }
 
     sub ast_named_val {
-        my ($data, $name, $expr) = @_;
-        my ($type, $value, $location) = @$name;
-        $value =~ s{:$}{};
-        return Named->$_new_ast(
-            location    => $location,
-            value       => $expr,
-            name        => String->$_new_ast(
+        my ($data, $name, $op, $expr) = @_;
+        my ($type, $value, $location) = @$op;
+        if ($name->$_isa('Pryll::AST::Bareword')) {
+            return Named->$_new_ast(
                 location    => $location,
-                value       => $value,
-            ),
-        );
+                value       => $expr,
+                name        => String->$_new_ast(
+                    location    => $name->location,
+                    value       => $name->value,
+                ),
+            );
+        }
+        else {
+            return Named->$_new_ast(
+                location    => $location,
+                name        => $name,
+                value       => $expr,
+            );
+        }
     }
 
     sub ast_number {
