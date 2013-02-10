@@ -40,7 +40,7 @@ my $_grammar = Marpa::R2::Grammar->new({
         expression ::=
                atom
             || expression T_op_method method
-                    (T_op_par_left) list (T_op_par_right)
+                    (T_op_par_left) arguments (T_op_par_right)
                 action => ast_method
             |  expression T_op_method method
                 action => ast_method
@@ -79,9 +79,21 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         assignable ::= variable
 
-        list ::= expression*
+        arguments ::= argument_item*
             separator => T_op_list_sep
             action => ast_list
+
+        argument_item ::= list_item | named_item
+
+        list_item ::= expression | slice_list
+        named_item ::= named_val | slice_named
+
+        slice_list  ::= T_op_slice_list expression
+            action => ast_slice_list
+        slice_named ::= T_op_slice_named expression
+            action => ast_slice_named
+
+        named_val ::= T_val_name expression action => ast_named_val
 
         op_assign ::= T_op_assign | T_op_assign_sc
 
@@ -150,14 +162,17 @@ my @_operators = (
     ['concat',      '~'],
     ['not_high',    '!'],
     ['math_low',    '+', '-'],
-    ['math_high',   '*', '/', '%'],
+    ['math_high',   '*', '/', 'mod'],
     ['method',      '.&', '.'],
     ['list_sep',    ','],
     ['par_left',    '('],
     ['par_right',   ')'],
+    ['slice_list',  '@'],
+    ['slice_named', '%'],
 );
 
 my @_tokens = (
+    ['val_name',    qr{ $_rx_bareword : }x],
     (map { [$_, qr{\Q$_\E}] } @_keywords),
     (map {
         my ($name, @symbols) = @$_;
@@ -204,6 +219,20 @@ do {
         return \@items;
     }
 
+    sub ast_named_val {
+        my ($data, $name, $expr) = @_;
+        my ($type, $value, $location) = @$name;
+        $value =~ s{:$}{};
+        return Named->$_new_ast(
+            location    => $location,
+            value       => $expr,
+            name        => String->$_new_ast(
+                location    => $location,
+                value       => $value,
+            ),
+        );
+    }
+
     sub ast_number {
         my ($data, $token) = @_;
         my ($type, $value, $location) = @$token;
@@ -211,6 +240,24 @@ do {
         return Number->$_new_ast(
             value       => $value,
             location    => $location,
+        );
+    }
+
+    sub ast_slice_named {
+        my ($data, $op, $expr) = @_;
+        my ($type, $value, $location) = @$op;
+        return Slice::Named->$_new_ast(
+            location => $location,
+            value    => $expr,
+        );
+    }
+
+    sub ast_slice_list {
+        my ($data, $op, $expr) = @_;
+        my ($type, $value, $location) = @$op;
+        return Slice::List->$_new_ast(
+            location => $location,
+            value    => $expr,
         );
     }
 

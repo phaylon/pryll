@@ -54,10 +54,42 @@ sub cb_lex_var {
     );
 }
 
+sub cb_str {
+    return cb_isa(
+        'AST::String',
+        cb_attr(value => cb_is(shift)),
+    );
+}
+
+sub cb_slice_named {
+    return cb_isa(
+        'AST::Slice::Named',
+        cb_attr(value => shift),
+    );
+}
+
+sub cb_slice_list {
+    return cb_isa(
+        'AST::Slice::List',
+        cb_attr(value => shift),
+    );
+}
+
 sub cb_bareword {
     return cb_isa(
         'AST::Bareword',
         cb_attr(value => cb_is(shift)),
+    );
+}
+
+sub cb_named {
+    my ($name, $value) = @_;
+    return cb_isa(
+        'AST::Named',
+        cb_all(
+            cb_attr(name  => $name),
+            cb_attr(value => $value),
+        ),
     );
 }
 
@@ -136,7 +168,7 @@ test_all('operators', $_test_ok,
         ['str le', 'le'], ['str ge', 'ge'],
         ['concat', '~'],
         ['add', '+'], ['subtract', '-'],
-        ['divide', '/'], ['multiply', '*'], ['modulus', '%'],
+        ['divide', '/'], ['multiply', '*'], ['modulus', 'mod'],
     ),
     (map {
         my ($name, $op) = @$_;
@@ -160,6 +192,30 @@ test_all('operators', $_test_ok,
                 cb_num(17),
             ),
         ],
+        ["named $name with named args", "\$obj${op}foo(x: 23, y: 17)",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_bareword('foo'),
+                cb_named(cb_str('x'), cb_num(23)),
+                cb_named(cb_str('y'), cb_num(17)),
+            ),
+        ],
+        ["named $name with list slice", "\$obj${op}foo(\$x, \@\$foo)",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_bareword('foo'),
+                cb_lex_var('x'),
+                cb_slice_list(cb_lex_var('foo')),
+            ),
+        ],
+        ["named $name with named slice", "\$obj${op}foo(\$x, \%\$foo)",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_bareword('foo'),
+                cb_lex_var('x'),
+                cb_slice_named(cb_lex_var('foo')),
+            ),
+        ],
         ["variable $name", "\$obj${op}\$foo",
             cb_method($op,
                 cb_lex_var('obj'),
@@ -178,6 +234,14 @@ test_all('operators', $_test_ok,
                 cb_lex_var('foo'),
                 cb_num(23),
                 cb_num(17),
+            ),
+        ],
+        ["variable $name with named args", "\$obj${op}\$foo(x: 23, y: 17)",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_lex_var('foo'),
+                cb_named(cb_str('x'), cb_num(23)),
+                cb_named(cb_str('y'), cb_num(17)),
             ),
         ];
     }   ['method call', '.'],
