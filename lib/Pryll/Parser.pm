@@ -39,6 +39,11 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            || expression T_op_method method
+                    (T_op_par_left) list (T_op_par_right)
+                action => ast_method
+            |  expression T_op_method method
+                action => ast_method
             || assignable T_op_step
                 action => ast_unop_post
                 assoc => left
@@ -70,10 +75,13 @@ my $_grammar = Marpa::R2::Grammar->new({
             || expression T_op_or_low expression
                 action => ast_binop
 
-        op_diff ::= op_diff_tail+
-        op_diff_tail ::= T_op_diff expression
+        method ::= variable | bareword
 
         assignable ::= variable
+
+        list ::= expression*
+            separator => T_op_list_sep
+            action => ast_list
 
         op_assign ::= T_op_assign | T_op_assign_sc
 
@@ -82,6 +90,7 @@ my $_grammar = Marpa::R2::Grammar->new({
             |  T_lex_var    action => ast_lex_var
 
         variable ::= T_lex_var action => ast_lex_var
+        bareword ::= T_bareword action => ast_bareword
 
         number ::= T_integer | T_float
 
@@ -138,6 +147,10 @@ my @_operators = (
     ['not_high',    '!'],
     ['math_low',    '+', '-'],
     ['math_high',   '*', '/', '%'],
+    ['method',      '.&', '.'],
+    ['list_sep',    ','],
+    ['par_left',    '('],
+    ['par_right',   ')'],
 );
 
 my @_tokens = (
@@ -181,6 +194,11 @@ sub _tokens_for {
 do {
     package Pryll::Parser::Actions;
     use Safe::Isa;
+
+    sub ast_list {
+        my ($data, @items) = @_;
+        return \@items;
+    }
 
     sub ast_number {
         my ($data, $token) = @_;
@@ -253,10 +271,26 @@ do {
         );
     }
 
-    my %_seqop_category => (
-        (map { ($_, 'num') } '>', '<', '>=', '<='),
-        (map { ($_, 'str') } 'gt', 'lt', 'ge', 'le'),
-    );
+    sub ast_bareword {
+        my ($data, $token) = @_;
+        my ($type, $value, $location) = @$token;
+        return Bareword->$_new_ast(
+            value       => $value,
+            location    => $location,
+        );
+    }
+
+    sub ast_method {
+        my ($data, $invocant, $op, $method, $args) = @_;
+        my ($type, $value, $location) = @$op;
+        return Operator::Method->$_new_ast(
+            invocant    => $invocant,
+            method      => $method,
+            arguments   => $args || [],
+            symbol      => $value,
+            location    => $location,
+        );
+    }
 
     sub ast_document {
         my ($data, @parts) = @_;

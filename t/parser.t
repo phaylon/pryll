@@ -54,6 +54,26 @@ sub cb_lex_var {
     );
 }
 
+sub cb_bareword {
+    return cb_isa(
+        'AST::Bareword',
+        cb_attr(value => cb_is(shift)),
+    );
+}
+
+sub cb_method {
+    my ($op, $inv, $method, @args) = @_;
+    return cb_isa(
+        'AST::Operator::Method',
+        cb_all(
+            cb_attr(invocant    => $inv),
+            cb_attr(symbol      => cb_is($op)),
+            cb_attr(method      => $method),
+            cb_attr(arguments   => @args),
+        ),
+    );
+}
+
 test_all('document', $_test_ok,
     ['empty',           ''],
     ['single value',    '23',       cb_num('23')],
@@ -117,6 +137,51 @@ test_all('operators', $_test_ok,
         ['concat', '~'],
         ['add', '+'], ['subtract', '-'],
         ['divide', '/'], ['multiply', '*'], ['modulus', '%'],
+    ),
+    (map {
+        my ($name, $op) = @$_;
+        ["named $name", "\$obj${op}foo",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_bareword('foo'),
+            ),
+        ],
+        ["named $name with empty arglist", "\$obj${op}foo()",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_bareword('foo'),
+            ),
+        ],
+        ["named $name with arglist", "\$obj${op}foo(23, 17)",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_bareword('foo'),
+                cb_num(23),
+                cb_num(17),
+            ),
+        ],
+        ["variable $name", "\$obj${op}\$foo",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_lex_var('foo'),
+            ),
+        ],
+        ["variable $name with empty arglist", "\$obj${op}\$foo()",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_lex_var('foo'),
+            ),
+        ],
+        ["variable $name with arglist", "\$obj${op}\$foo(23, 17)",
+            cb_method($op,
+                cb_lex_var('obj'),
+                cb_lex_var('foo'),
+                cb_num(23),
+                cb_num(17),
+            ),
+        ];
+    }   ['method call', '.'],
+        ['method ref', '.&'],
     ),
     (map {
         my ($name, $op) = @$_;
