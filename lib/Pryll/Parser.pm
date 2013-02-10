@@ -101,8 +101,8 @@ my $_grammar = Marpa::R2::Grammar->new({
         atom ::=
                number       
                 action => ast_number
-            |  T_bareword
-                action => ast_bareword
+            |  T_identifier
+                action => ast_identifier
             |  T_lex_var    
                 action => ast_lex_var
             |  T_op_par_left expression T_op_par_right
@@ -110,6 +110,7 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         variable ::= T_lex_var action => ast_lex_var
         bareword ::= T_bareword action => ast_bareword
+        identifier ::= T_identifier action => ast_identifier
 
         number ::= T_integer | T_float
 
@@ -118,16 +119,28 @@ my $_grammar = Marpa::R2::Grammar->new({
 
 $_grammar->precompute;
 
+my %_retry_token = (
+    bareword => 'identifier',
+);
+
 sub parse {
     my ($self, $source) = @_;
     return Document->$_new_ast(name => $source->name)
         unless length $source->body;
     my $recog = Marpa::R2::Recognizer->new({ grammar => $_grammar });
     my $tokens = $self->_tokens_for($source);
-#    use Data::Dump qw( pp );
     for my $token (@$tokens) {
-        my $ok = $recog->read('T_' . $token->[0], $token);
-#        print "TOKEN " . $token->[0] . ' ' . pp($ok) . "\n";
+        my $type = $token->[0];
+        my $value = $token->[1];
+        my $ok = $recog->read('T_' . $type, $token);
+        unless (defined $ok) {
+            if (my $retry = $_retry_token{$type}) {
+                $ok = $recog->read(
+                    'T_' . $retry,
+                    [$retry, @{ $token }[1, 2]],
+                );
+            }
+        }
         die "Unable to parse " . $token->[0]
             unless defined $ok;
     }
@@ -186,6 +199,7 @@ my @_tokens = (
         my ($name, @symbols) = @$_;
         ["op_$name", map qr{$_}, join '|', map qr{\Q$_\E}, @symbols];
     } @_operators),
+    ['identifier',  qr{ $_rx_bareword (?: :: $_rx_bareword )+ }x],
     ['bareword',    $_rx_bareword],
     ['lex_var',     qr{ \$ $_rx_bareword }x],
     ['float',       qr{ $_rx_int [.] $_rx_int }x],
@@ -230,7 +244,7 @@ do {
     sub ast_named_val {
         my ($data, $name, $op, $expr) = @_;
         my ($type, $value, $location) = @$op;
-        if ($name->$_isa('Pryll::AST::Bareword')) {
+        if ($name->$_isa('Pryll::AST::Identifier')) {
             return Named->$_new_ast(
                 location    => $location,
                 value       => $expr,
@@ -334,6 +348,15 @@ do {
         return Operator::Unary->$_new_ast(
             symbol      => $value,
             operand     => $right,
+            location    => $location,
+        );
+    }
+
+    sub ast_identifier {
+        my ($data, $token) = @_;
+        my ($type, $value, $location) = @$token;
+        return Identifier->$_new_ast(
+            value       => $value,
             location    => $location,
         );
     }

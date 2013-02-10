@@ -75,6 +75,13 @@ sub cb_slice_list {
     );
 }
 
+sub cb_ident {
+    return cb_isa(
+        'AST::Identifier',
+        cb_attr(value => cb_is(shift)),
+    );
+}
+
 sub cb_bareword {
     return cb_isa(
         'AST::Bareword',
@@ -401,6 +408,14 @@ test_all('groupings', $_test_ok,
             cb_num(55),
         ),
     ],
+);
+
+test_all('barewords', $_test_ok,
+    ['namespaced', 'Foo::Bar::Baz', cb_ident('Foo::Bar::Baz')],
+    ['bareword', 'foo', cb_ident('foo')],
+    ['odd namespace', '_Foo23::_Bar::_4', cb_ident('_Foo23::_Bar::_4')],
+    ['private bareword', '_foo', cb_ident('_foo')],
+    ['private num bareword', '_23', cb_ident('_23')],
 );
 
 done_testing;
