@@ -82,6 +82,13 @@ sub cb_ident {
     );
 }
 
+sub cb_hash {
+    return cb_isa(
+        'AST::Hash',
+        cb_attr(items => @_),
+    );
+}
+
 sub cb_array {
     return cb_isa(
         'AST::Array',
@@ -434,6 +441,24 @@ test_all('arrays', $_test_ok,
             cb_num(23),
             cb_slice_list(cb_lex_var('foo')),
             cb_num(17),
+        ),
+    ],
+);
+
+test_all('hashes', $_test_ok,
+    ['simple', '{ x: 23, y: 17 }',
+        cb_hash(
+            cb_named(cb_str('x'), cb_num(23)),
+            cb_named(cb_str('y'), cb_num(17)),
+        ),
+    ],
+    ['single', '{ x: 17 }', cb_hash(cb_named(cb_str('x'), cb_num(17)))],
+    ['empty', '{}', cb_hash()],
+    ['slice in hash', '{ x: 17, %$foo, y: 23 }',
+        cb_hash(
+            cb_named(cb_str('x'), cb_num(17)),
+            cb_slice_named(cb_lex_var('foo')),
+            cb_named(cb_str('y'), cb_num(23)),
         ),
     ],
 );

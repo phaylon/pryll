@@ -89,6 +89,10 @@ my $_grammar = Marpa::R2::Grammar->new({
             separator => T_op_list_sep
             action => ast_list
 
+        hash_init ::= named_item*
+            separator => T_op_list_sep
+            action => ast_list
+
         list_item ::= expression | slice_list
         named_item ::= named_val | slice_named
 
@@ -113,6 +117,8 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_grouping
             | T_brack_left array_init T_brack_right
                 action => ast_array
+            | T_brac_left hash_init T_brac_right
+                action => ast_hash
 
         variable ::= T_lex_var action => ast_lex_var
         bareword ::= T_bareword action => ast_bareword
@@ -201,6 +207,8 @@ my @_tokens = (
     ['par_right',   ')'],
     ['brack_left',  '['],
     ['brack_right', ']'],
+    ['brac_left',   '{'],
+    ['brac_right',  '}'],
     (map { [$_, qr{\Q$_\E}] } @_keywords),
     (map {
         my ($name, @symbols) = @$_;
@@ -271,6 +279,15 @@ do {
                 value       => $expr,
             );
         }
+    }
+
+    sub ast_hash {
+        my ($data, $l_op, $list, $r_op) = @_;
+        my ($type, $value, $location) = @$l_op;
+        return Hash->$_new_ast(
+            location    => $location,
+            items       => $list,
+        );
     }
 
     sub ast_array {
