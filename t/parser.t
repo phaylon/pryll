@@ -82,6 +82,13 @@ sub cb_ident {
     );
 }
 
+sub cb_array {
+    return cb_isa(
+        'AST::Array',
+        cb_attr(items => @_),
+    );
+}
+
 sub cb_bareword {
     return cb_isa(
         'AST::Bareword',
@@ -416,6 +423,19 @@ test_all('barewords', $_test_ok,
     ['odd namespace', '_Foo23::_Bar::_4', cb_ident('_Foo23::_Bar::_4')],
     ['private bareword', '_foo', cb_ident('_foo')],
     ['private num bareword', '_23', cb_ident('_23')],
+);
+
+test_all('arrays', $_test_ok,
+    ['simple', '[23, 17]', cb_array(cb_num(23), cb_num(17))],
+    ['single', '[23]', cb_array(cb_num(23))],
+    ['empty', '[]', cb_array()],
+    ['slice in list', '[23, @$foo, 17]',
+        cb_array(
+            cb_num(23),
+            cb_slice_list(cb_lex_var('foo')),
+            cb_num(17),
+        ),
+    ],
 );
 
 done_testing;

@@ -40,7 +40,7 @@ my $_grammar = Marpa::R2::Grammar->new({
         expression ::=
                atom
             || expression T_op_method method
-                    (T_op_par_left) arguments (T_op_par_right)
+                    (T_par_left) arguments (T_par_right)
                 action => ast_method
             |  expression T_op_method method
                 action => ast_method
@@ -85,6 +85,10 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         argument_item ::= named_item | list_item
 
+        array_init ::= list_item*
+            separator => T_op_list_sep
+            action => ast_list
+
         list_item ::= expression | slice_list
         named_item ::= named_val | slice_named
 
@@ -105,8 +109,10 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_identifier
             |  T_lex_var    
                 action => ast_lex_var
-            |  T_op_par_left expression T_op_par_right
+            |  T_par_left expression T_par_right
                 action => ast_grouping
+            | T_brack_left array_init T_brack_right
+                action => ast_array
 
         variable ::= T_lex_var action => ast_lex_var
         bareword ::= T_bareword action => ast_bareword
@@ -185,15 +191,16 @@ my @_operators = (
     ['math_high',   '*', '/', 'mod'],
     ['method',      '.&', '.'],
     ['list_sep',    ','],
-    ['par_left',    '('],
-    ['par_right',   ')'],
     ['slice_list',  '@'],
     ['slice_named', '%'],
     ['colon',       ':'],
 );
 
 my @_tokens = (
-#    ['val_name',    qr{ $_rx_bareword : }x],
+    ['par_left',    '('],
+    ['par_right',   ')'],
+    ['brack_left',  '['],
+    ['brack_right', ']'],
     (map { [$_, qr{\Q$_\E}] } @_keywords),
     (map {
         my ($name, @symbols) = @$_;
@@ -204,7 +211,7 @@ my @_tokens = (
     ['lex_var',     qr{ \$ $_rx_bareword }x],
     ['float',       qr{ $_rx_int [.] $_rx_int }x],
     ['integer',     $_rx_int],
-    ['stmt_sep',    qr{;}],
+    ['stmt_sep',    ';'],
     ['whitespace',  qr{\s}],
 );
 
@@ -220,6 +227,9 @@ sub _tokens_for {
         my $location = $_find_location->($source, $string);
         TOKEN: for my $token (@_tokens) {
             my ($name, $pattern) = @$token;
+            unless (ref $pattern) {
+                $pattern = qr{\Q$pattern\E};
+            }
             if ($string =~ s{^($pattern)}{}) {
                 unless ($_discard_token{$name}) {
                     push @found, [$name, $1, $location];
@@ -261,6 +271,15 @@ do {
                 value       => $expr,
             );
         }
+    }
+
+    sub ast_array {
+        my ($data, $l_op, $list, $r_op) = @_;
+        my ($type, $value, $location) = @$l_op;
+        return Array->$_new_ast(
+            location    => $location,
+            items       => $list,
+        );
     }
 
     sub ast_number {
