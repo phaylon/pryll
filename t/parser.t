@@ -127,6 +127,57 @@ sub cb_method {
     );
 }
 
+sub cb_lambda {
+    my ($signature, $traits, @body) = @_;
+    return cb_isa(
+        'AST::Lambda',
+        cb_all(
+            cb_attr(signature   => $signature),
+            cb_attr(traits      => @$traits),
+            cb_attr(expressions => @body),
+        ),
+    );
+}
+
+sub cb_param_def { cb_attr(init_expression => shift) }
+sub cb_param_pos { cb_attr(is_named => cb_is(0)) }
+sub cb_param_nam { cb_attr(is_named => cb_is(1)) }
+sub cb_param_req { cb_attr(is_optional => cb_is(0)) }
+sub cb_param_opt { cb_attr(is_optional => cb_is(1)) }
+sub cb_param_var { cb_attr(variable => cb_lex_var(shift)) }
+
+sub cb_traits { cb_attr(traits => @_) }
+
+sub cb_trait {
+    my ($name, @args) = @_;
+    return cb_isa(
+        'AST::Trait',
+        cb_all(
+            cb_attr(name => cb_is($name)),
+            cb_attr(arguments => @args),
+        ),
+    );
+}
+
+sub cb_param {
+    my (@tests) = @_;
+    return cb_isa(
+        'AST::Signature::Parameter',
+        cb_all(@tests),
+    );
+}
+
+sub cb_signature {
+    my ($pos, $nam) = @_;
+    return cb_isa(
+        'AST::Signature',
+        cb_all(
+            cb_attr(named => @{ $nam || [] }),
+            cb_attr(positional => @{ $pos || [] }),
+        ),
+    );
+}
+
 test_all('document', $_test_ok,
     ['empty',           ''],
     ['single value',    '23',       cb_num('23')],
@@ -459,6 +510,224 @@ test_all('hashes', $_test_ok,
             cb_named(cb_str('x'), cb_num(17)),
             cb_slice_named(cb_lex_var('foo')),
             cb_named(cb_str('y'), cb_num(23)),
+        ),
+    ],
+);
+
+test_all('lambda and signatures', $_test_ok,
+    ['bare', 'lambda { 23 }', cb_lambda(cb_undef(), [], cb_num(23))],
+    ['empty', 'lambda { }', cb_lambda(cb_undef(), [])],
+    ['multiple statements', 'lambda { 23; 17 }',
+        cb_lambda(cb_undef(), [], cb_num(23), cb_num(17)),
+    ],
+    ['with traits', 'lambda :x, :y(23) { 17 }',
+        cb_lambda(
+            cb_undef(),
+            [cb_trait('x'), cb_trait('y', cb_num(23))],
+            cb_num(17),
+        ),
+    ],
+    ['with signature and traits', 'lambda ($n) :x, :y(23) { 17 }',
+        cb_lambda(
+            cb_signature(
+                [cb_param(cb_param_var('n'))],
+            ),
+            [cb_trait('x'), cb_trait('y', cb_num(23))],
+            cb_num(17),
+        ),
+    ],
+    ['empty signature', 'lambda () { 23 }',
+        cb_lambda(
+            cb_signature(),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['single positional parameter', 'lambda ($n) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [cb_param(cb_param_req, cb_param_var('n'), cb_traits)],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['multiple positional parameters', 'lambda ($n, $m) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [
+                    cb_param(cb_param_req, cb_param_var('n'), cb_traits),
+                    cb_param(cb_param_req, cb_param_var('m'), cb_traits),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['defaulted positional parameter', 'lambda ($n, $m = 17) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [
+                    cb_param(cb_param_req, cb_param_var('n'), cb_traits),
+                    cb_param(
+                        cb_param_opt,
+                        cb_param_var('m'),
+                        cb_traits,
+                        cb_param_def(cb_num(17)),
+                    ),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['optional positional parameter', 'lambda ($n, $m?) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [
+                    cb_param(cb_param_req, cb_param_var('n'), cb_traits),
+                    cb_param(cb_param_opt, cb_param_var('m'), cb_traits),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['positional parameter with trait', 'lambda ($n :x, $m :y(3)) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [
+                    cb_param(
+                        cb_param_req,
+                        cb_param_var('n'),
+                        cb_traits(cb_trait('x')),
+                    ),
+                    cb_param(
+                        cb_param_req,
+                        cb_param_var('m'),
+                        cb_traits(cb_trait('y', cb_num(3))),
+                    ),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['positional parameter with multiple traits',
+        'lambda ($n :x, :y(17), $m :y(3)) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [
+                    cb_param(
+                        cb_param_req,
+                        cb_param_var('n'),
+                        cb_traits(
+                            cb_trait('x'),
+                            cb_trait('y', cb_num(17)),
+                        ),
+                    ),
+                    cb_param(
+                        cb_param_req,
+                        cb_param_var('m'),
+                        cb_traits(cb_trait('y', cb_num(3))),
+                    ),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['single named parameter', 'lambda (:$n) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [],
+                [cb_param(cb_param_req, cb_param_var('n'), cb_traits)],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['multiple named parameters', 'lambda (:$n, :$m) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [],
+                [
+                    cb_param(cb_param_req, cb_param_var('n'), cb_traits),
+                    cb_param(cb_param_req, cb_param_var('m'), cb_traits),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['optional named parameters', 'lambda (:$n?, :$m) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [],
+                [
+                    cb_param(cb_param_opt, cb_param_var('n'), cb_traits),
+                    cb_param(cb_param_req, cb_param_var('m'), cb_traits),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['named parameters with traits',
+        'lambda (:$n :x, :y(23), :$m :y(17)) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [],
+                [
+                    cb_param(
+                        cb_param_req,
+                        cb_param_var('n'),
+                        cb_traits(
+                            cb_trait('x'),
+                            cb_trait('y', cb_num(23)),
+                        ),
+                    ),
+                    cb_param(
+                        cb_param_req,
+                        cb_param_var('m'),
+                        cb_traits(cb_trait('y', cb_num(17))),
+                    ),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['defaulted named parameters', 'lambda (:$n = 17, :$m) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [],
+                [
+                    cb_param(
+                        cb_param_opt,
+                        cb_param_var('n'),
+                        cb_traits,
+                        cb_param_def(cb_num(17)),
+                    ),
+                    cb_param(cb_param_req, cb_param_var('m'), cb_traits),
+                ],
+            ),
+            [],
+            cb_num(23),
+        ),
+    ],
+    ['mixed parameters', 'lambda ($n, :$m) { 23 }',
+        cb_lambda(
+            cb_signature(
+                [
+                    cb_param(cb_param_req, cb_param_var('n'), cb_traits),
+                ],
+                [
+                    cb_param(cb_param_req, cb_param_var('m'), cb_traits),
+                ],
+            ),
+            [],
+            cb_num(23),
         ),
     ],
 );

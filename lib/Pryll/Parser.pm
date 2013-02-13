@@ -16,6 +16,7 @@ my $_new_ast = sub {
 
 my @_keywords = qw(
     my
+    lambda
 );
 
 my $_inflate = sub {
@@ -39,6 +40,7 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         expression ::=
                atom
+            | syntax
             || expression T_op_method method
                     (T_par_left) arguments (T_par_right)
                 action => ast_method
@@ -74,6 +76,59 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_binop
             || expression T_op_or_low expression
                 action => ast_binop
+
+        syntax ::=
+            syntax_lambda
+
+        syntax_lambda ::= T_kw_lambda signature_opt traits block
+                action => ast_lambda
+
+        signature_opt ::= signature | nothing
+
+        signature ::= T_par_left signature_params T_par_right
+            action => ast_signature
+
+        signature_params ::= signature_param*
+            separator => T_op_list_sep
+            action => ast_list
+
+        signature_param ::=
+               colon_opt variable qmark_opt traits assign_opt
+                action => ast_signature_param
+            |  T_op_slice_list variable
+                action => ast_signature_rest_pos
+            |  T_op_slice_named variable
+                action => ast_signature_rest_named
+
+        colon_opt ::= T_op_colon | nothing
+
+        qmark_opt ::= T_op_qmark | nothing
+
+        assign_opt ::= assign | nothing
+
+        assign ::= T_op_assign expression
+            action => ast_assign
+
+        nothing ::=
+
+        traits ::= trait*
+            separator => T_op_list_sep
+            action => ast_list
+
+        trait ::= T_op_colon bareword trait_arguments_opt
+            action => ast_trait
+
+        trait_arguments_opt ::= trait_arguments | nothing
+
+        trait_arguments ::= T_par_left arguments T_par_right
+            action => ast_trait_arguments
+
+        block ::= T_brac_left block_body T_brac_right
+            action => ast_block
+
+        block_body ::= expression*
+            separator => T_stmt_sep
+            action => ast_list
 
         method ::= variable | bareword
 
@@ -200,6 +255,7 @@ my @_operators = (
     ['slice_list',  '@'],
     ['slice_named', '%'],
     ['colon',       ':'],
+    ['qmark',       '?'],
 );
 
 my @_tokens = (
@@ -209,7 +265,7 @@ my @_tokens = (
     ['brack_right', ']'],
     ['brac_left',   '{'],
     ['brac_right',  '}'],
-    (map { [$_, qr{\Q$_\E}] } @_keywords),
+    (map { ["kw_$_", qr{\Q$_\E}] } @_keywords),
     (map {
         my ($name, @symbols) = @$_;
         ["op_$name", map qr{$_}, join '|', map qr{\Q$_\E}, @symbols];
@@ -257,6 +313,108 @@ do {
     sub ast_list {
         my ($data, @items) = @_;
         return \@items;
+    }
+
+    sub ast_block {
+        my ($data, $l_op, $body, $r_op) = @_;
+        return $body;
+    }
+
+    sub ast_trait_arguments {
+        my ($data, $l_op, $arguments, $r_op) = @_;
+        return $arguments;
+    }
+
+    sub ast_trait {
+        my ($data, $op, $name, $arguments) = @_;
+        my ($type, $value, $location) = @$op;
+        return Trait->$_new_ast(
+            location    => $location,
+            name        => $name->value,
+            arguments   => $arguments || [],
+        );
+    }
+
+    sub ast_lambda {
+        my ($data, $kw, $signature, $traits, $body) = @_;
+        my ($type, $value, $location) = @$kw;
+        return Lambda->$_new_ast(
+            location    => $location,
+            expressions => $body,
+            signature   => $signature,
+            traits      => $traits || [],
+        );
+    }
+
+    sub ast_assign {
+        my ($data, $op, $expr) = @_;
+        return $expr;
+    }
+
+    sub ast_signature_rest_named { signature_rest(1, @_) }
+    sub ast_signature_rest_pos   { signature_rest(0, @_) }
+
+    sub signature_rest {
+        my ($is_named, $data, $op, $variable) = @_;
+        return Signature::Rest->$_new_ast(
+            is_named    => $is_named,
+            variable    => $variable,
+        );
+    }
+
+    sub ast_signature {
+        my ($data, $l_op, $params, $r_op) = @_;
+        my ($type, $value, $location) = @$l_op;
+        my (@named, @positional, %rest);
+        my $seen_named;
+        my $seen_optional;
+        my %seen_rest;
+        for my $param (@{ $params || [] }) {
+            if ($param->$_isa('Pryll::AST::Signature::Rest')) {
+                my $p_type = $param->is_named ? 'named' : 'positional';
+                die "Cannot have more than one $p_type rest parameter"
+                    if $seen_rest{$p_type};
+                $seen_rest{$p_type} = 1;
+                $rest{"${p_type}_rest"} = $param;
+            }
+            else {
+                die "Parameters can't come after rest parameters"
+                    if keys %seen_rest;
+                if ($param->is_named) {
+                    $seen_named = 1;
+                    push @named, $param;
+                }
+                else {
+                    die "Positionals can't come after named parameters"
+                        if $seen_named;
+                    if ($param->is_optional) {
+                        $seen_optional = 1;
+                    }
+                    else {
+                        die "Requireds can't come after optionals"
+                            if $seen_optional;
+                    }
+                    push @positional, $param;
+                }
+            }
+        }
+        return Signature->$_new_ast(
+            location    => $location,
+            named       => \@named,
+            positional  => \@positional,
+            %rest,
+        );
+    }
+
+    sub ast_signature_param {
+        my ($data, $is_named, $variable, $is_opt, $traits, $expr) = @_;
+        return Signature::Parameter->$_new_ast(
+            is_named        => $is_named ? 1 : 0,
+            is_optional     => $is_opt ? 1 : $expr ? 1 : 0,
+            variable        => $variable,
+            init_expression => $expr,
+            traits          => $traits || [],
+        );
     }
 
     sub ast_named_val {

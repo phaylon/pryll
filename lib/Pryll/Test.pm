@@ -9,7 +9,7 @@ use aliased 'Pryll::Source';
 
 our %EXPORT_TAGS = (
     ast => [qw( parse_string )],
-    cb  => [qw( cb_isa cb_attr cb_is cb_all )],
+    cb  => [qw( cb_isa cb_attr cb_is cb_all cb_undef )],
 );
 
 our @EXPORT_OK = (
@@ -37,6 +37,13 @@ sub cb_isa {
                 });
             }
         };
+    };
+}
+
+sub cb_undef {
+    return sub {
+        my ($value) = @_;
+        Test::More::ok(not(defined $value), "value is undefined");
     };
 }
 
