@@ -4,12 +4,14 @@ package Pryll::Test;
 use Exporter 'import';
 use Test::More ();
 
+use aliased 'Pryll::Compiler';
 use aliased 'Pryll::Parser';
 use aliased 'Pryll::Source';
 
 our %EXPORT_TAGS = (
-    ast => [qw( parse_string )],
-    cb  => [qw( cb_isa cb_attr cb_is cb_all cb_undef )],
+    ast     => [qw( parse_string )],
+    compile => [qw( run_string )],
+    cb      => [qw( cb_isa cb_attr cb_is cb_all cb_undef )],
 );
 
 our @EXPORT_OK = (
@@ -95,6 +97,16 @@ sub grouped {
         Test::More::done_testing;
     });
     return 1;
+}
+
+sub run_string {
+    my ($string) = @_;
+    my $result = Compiler->new->compile(
+        parse_string($string),
+    );
+    Test::More::note("Compiled:\n" . $result->compiled)
+        if $ENV{DEBUG_CODE};
+    return $result->run;
 }
 
 sub parse_string {

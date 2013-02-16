@@ -315,7 +315,7 @@ test_all('operators', $_test_ok,
                 cb_named(cb_str('x'), cb_num(23)),
                 cb_named(cb_str('y'), cb_num(17)),
             ),
-        ];
+        ],
     }   ['method call', '.'],
         ['method ref', '.&'],
     ),

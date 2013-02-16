@@ -11,4 +11,12 @@ has _parts_ref => (
 
 sub parts { @{ $_[0]->_parts_ref } }
 
+sub compile {
+    my ($self, $ctx) = @_;
+    return sprintf(
+        '(do { no warnings qw( void ); %s })',
+        join('; ', map $_->compile($ctx), $self->parts),
+    );
+}
+
 1;

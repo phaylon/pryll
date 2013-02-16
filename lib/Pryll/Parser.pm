@@ -84,7 +84,12 @@ my $_grammar = Marpa::R2::Grammar->new({
         method_call_chain ::= T_op_emark | nothing
 
         syntax ::=
-            syntax_lambda
+                syntax_lambda
+            |   syntax_my
+
+        syntax_my ::=
+            T_kw_my variable traits assign_opt
+                action => ast_lex_my
 
         syntax_lambda ::= T_kw_lambda signature_opt traits block
                 action => ast_lambda
@@ -183,7 +188,7 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         variable ::= T_lex_var action => ast_lex_var
         bareword ::= T_bareword action => ast_bareword
-        identifier ::= T_identifier action => ast_identifier
+#        identifier ::= T_identifier action => ast_identifier
 
         number ::= T_integer | T_float
 
@@ -350,6 +355,17 @@ do {
             expressions => $body,
             signature   => $signature,
             traits      => $traits || [],
+        );
+    }
+
+    sub ast_lex_my {
+        my ($data, $kw, $variable, $traits, $assign) = @_;
+        my ($type, $value, $location) = @$kw;
+        return Lexical::Declare->$_new_ast(
+            location    => $location,
+            variable    => $variable,
+            traits      => $traits || [],
+            initialize  => $assign,
         );
     }
 
