@@ -31,4 +31,10 @@ test_all('lexicals', $_test_ok,
         'my $foo; my $bar; $foo = $bar = 23; $bar', '23'],
 );
 
+test_all('arrays', $_test_ok,
+    ['construction', '[23, 17]', [23, 17]],
+    ['single element', '[23]', [23]],
+    ['empty', '[]', []],
+);
+
 done_testing;
