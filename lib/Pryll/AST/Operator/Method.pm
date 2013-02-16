@@ -8,8 +8,10 @@ with qw(
     Pryll::AST::HasArguments
 );
 
-has invocant  => (is => 'ro', required => 1);
-has symbol    => (is => 'ro', required => 1);
-has method    => (is => 'ro', required => 1);
+has invocant    => (is => 'ro', required => 1);
+has symbol      => (is => 'ro', required => 1);
+has method      => (is => 'ro', required => 1);
+has is_maybe    => (is => 'ro');
+has is_chained  => (is => 'ro');
 
 1;

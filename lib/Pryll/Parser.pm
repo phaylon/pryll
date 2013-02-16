@@ -42,6 +42,8 @@ my $_grammar = Marpa::R2::Grammar->new({
                atom
             | syntax
             || expression T_op_method method
+                    method_call_maybe
+                    method_call_chain
                     (T_par_left) arguments (T_par_right)
                 action => ast_method
             |  expression T_op_method method
@@ -76,6 +78,10 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_binop
             || expression T_op_or_low expression
                 action => ast_binop
+
+        method_call_maybe ::= T_op_qmark | nothing
+
+        method_call_chain ::= T_op_emark | nothing
 
         syntax ::=
             syntax_lambda
@@ -187,7 +193,8 @@ my $_grammar = Marpa::R2::Grammar->new({
 $_grammar->precompute;
 
 my %_retry_token = (
-    bareword => 'identifier',
+    bareword        => 'identifier',
+    op_not_high     => 'op_emark',
 );
 
 sub parse {
@@ -565,7 +572,7 @@ do {
     }
 
     sub ast_method {
-        my ($data, $invocant, $op, $method, $args) = @_;
+        my ($data, $invocant, $op, $method, $maybe, $chain, $args) = @_;
         my ($type, $value, $location) = @$op;
         return Operator::Method->$_new_ast(
             invocant    => $invocant,
@@ -573,6 +580,8 @@ do {
             arguments   => $args || [],
             symbol      => $value,
             location    => $location,
+            is_maybe    => $maybe ? 1 : 0,
+            is_chained  => $chain ? 1 : 0,
         );
     }
 
