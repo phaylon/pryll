@@ -64,6 +64,7 @@ sub compile_shift {
 sub compile_unshift {
     return oneline q!
         unshift(@{ %(v_object) }, @{ %(v_pos_arg) });
+        scalar(@{ %(v_pos_arg) });
     !;
 }
 
@@ -106,6 +107,17 @@ sub run_size {
 sub run_delete {
     my ($array, $pos) = @_;
     return scalar splice @$array, $pos->[0], 1;
+}
+
+sub run_shift {
+    my ($array) = @_;
+    return shift @$array;
+}
+
+sub run_unshift {
+    my ($array, $pos) = @_;
+    unshift @$array, @$pos;
+    return scalar @$pos;
 }
 
 1;
