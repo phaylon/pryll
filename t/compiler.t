@@ -1,7 +1,7 @@
 use strictures 1;
 use Test::More;
 
-use Pryll::Test qw( :compile test_all :cb );
+use Pryll::Test qw( :compile test_all test_methods :cb );
 
 my $_test_ok = sub {
     my ($source, $expected) = @_;
@@ -35,6 +35,14 @@ test_all('arrays', $_test_ok,
     ['construction', '[23, 17]', [23, 17]],
     ['single element', '[23]', [23]],
     ['empty', '[]', []],
+    ['slot read', '[2, 3, 4][1]', '3'],
+    ['slot write', 'my $foo = [2, 3, 4]; $foo[1] = 7; $foo', [2, 7, 4]],
+    ['write return', 'my $foo = [2, 3, 4]; $foo[1] = 7', '7'],
+    test_methods('[2, 3, 4]',
+        ['.get', 'get', '(1)', 3],
+        ['.set', 'set', '(1, 7); $obj', [2, 7, 4]],
+        ['.set return', 'set', '(1, 7)', '7'],
+    ),
 );
 
 done_testing;

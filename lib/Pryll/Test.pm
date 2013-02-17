@@ -15,7 +15,7 @@ our %EXPORT_TAGS = (
 );
 
 our @EXPORT_OK = (
-    qw( test_all grouped ),
+    qw( test_all grouped test_methods ),
     (map { (@$_) } values %EXPORT_TAGS),
 );
 
@@ -74,6 +74,17 @@ sub cb_attr {
             return 1;
         });
     };
+}
+
+sub test_methods {
+    my ($init, @tests) = @_;
+    return map {
+        my ($title, $method, $append, $expected) = @$_;
+        ["method $title",
+         "my \$obj = $init; \$obj.$method$append",
+         $expected,
+        ];
+    } @tests;
 }
 
 sub test_all {
