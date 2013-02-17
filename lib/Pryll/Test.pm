@@ -80,8 +80,12 @@ sub test_methods {
     my ($group_title, $init, @tests) = @_;
     return map {
         my ($title, $method, $append, $expected) = @$_;
-        ["$group_title method $title",
+        ["static $group_title method $title",
          "my \$obj = $init; \$obj.$method$append",
+         $expected,
+        ],
+        ["dynamic $group_title method $title",
+         "my \$m = '$method'; my \$obj = $init; \$obj.\$m$append",
          $expected,
         ];
     } @tests;

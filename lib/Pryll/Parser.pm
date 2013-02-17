@@ -183,8 +183,10 @@ my $_grammar = Marpa::R2::Grammar->new({
         op_assign ::= T_op_assign | T_op_assign_sc
 
         atom ::=
-               number       
+               number
                 action => ast_number
+            |  string
+                action => ast_string
             |  T_op_math_low number
                 action => ast_signed_number
             |  T_identifier
@@ -203,6 +205,7 @@ my $_grammar = Marpa::R2::Grammar->new({
 #        identifier ::= T_identifier action => ast_identifier
 
         number ::= T_integer | T_float
+        string ::= T_str_single | T_str_double
 
     },
 });
@@ -308,6 +311,8 @@ my @_tokens = (
     ['integer',     $_rx_int],
     ['stmt_sep',    ';'],
     ['whitespace',  qr{\s}],
+    ['str_single',  qr{'.*?(?<!\\)'}],
+    ['str_double',  qr{".*?(?<!\\)"}],
 );
 
 my %_discard_token = (
@@ -362,6 +367,32 @@ do {
         my ($data, @arguments) = @_;
         return Arguments->$_new_ast(
             items       => \@arguments,
+        );
+    }
+
+    my %_escape_sequence = (
+        t => "\t",
+        n => "\n",
+        r => "\r",
+        b => "\b",
+    );
+
+    sub ast_string {
+        my ($data, $string) = @_;
+        my ($type, $value, $location) = @$string;
+        if ($value =~ s{^'(.+)'$}{$1}) {
+            $value =~ s{\\'}{'}g;
+        }
+        elsif ($value =~ s{^"(.+)"$}{$1}) {
+            $value =~ s{\\"}{"}g;
+            $value =~ s{\\([tnrb])}{$_escape_sequence{$1}}ge;
+        }
+        else {
+            die "Malformed string";
+        }
+        return String->$_new_ast(
+            location    => $location,
+            value       => $value,
         );
     }
 
