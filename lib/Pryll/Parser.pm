@@ -32,7 +32,10 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         :start ::= document
 
-        document ::= document_part*
+        document ::= document_parts END_OF_STREAM
+            action => passthrough
+
+        document_parts ::= document_part*
             separator => T_stmt_sep
             action => ast_document
 
@@ -47,6 +50,8 @@ my $_grammar = Marpa::R2::Grammar->new({
                     (T_par_left) arguments (T_par_right)
                 action => ast_method
             |  expression T_op_method method
+                    method_call_maybe
+                    method_call_chain
                 action => ast_method
             || slot
                 action => passthrough
@@ -228,6 +233,8 @@ sub parse {
         die sprintf('Unable to parse %s (%s)', $token->[0], $token->[1])
             unless defined $ok;
     }
+    my $ok = $recog->read('END_OF_STREAM')
+        or die "Unexpected end";
     my $value = $recog->value;
     die "Unable to parse"
         unless defined $value;
