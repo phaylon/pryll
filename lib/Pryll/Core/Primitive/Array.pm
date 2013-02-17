@@ -19,4 +19,15 @@ sub compile_get {
     };
 }
 
+sub run_set {
+    my ($array, $pos) = @_;
+    $array->[$pos->[0]] = $pos->[1];
+    return $pos->[1];
+}
+
+sub run_get {
+    my ($array, $pos) = @_;
+    return $array->[$pos->[0]];
+}
+
 1;

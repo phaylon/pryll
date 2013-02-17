@@ -225,7 +225,7 @@ sub parse {
                 );
             }
         }
-        die "Unable to parse " . $token->[0]
+        die sprintf('Unable to parse %s (%s)', $token->[0], $token->[1])
             unless defined $ok;
     }
     my $value = $recog->value;
@@ -285,7 +285,12 @@ my @_tokens = (
     (map { ["kw_$_", qr{\Q$_\E}] } @_keywords),
     (map {
         my ($name, @symbols) = @$_;
-        ["op_$name", map qr{$_}, join '|', map qr{\Q$_\E}, @symbols];
+        ["op_$name", map qr{$_}, join '|', map {
+            my $follow = m{[a-z0-9_]$}
+                ? qr{(?![a-z0-9_])}
+                : '';
+            qr{\Q$_\E$follow}
+        } @symbols];
     } @_operators),
     ['identifier',  qr{ $_rx_bareword (?: :: $_rx_bareword )+ }x],
     ['bareword',    $_rx_bareword],

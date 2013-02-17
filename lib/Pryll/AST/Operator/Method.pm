@@ -34,17 +34,17 @@ sub compile {
     }
 }
 
-sub is_static { $_[0]->method->isa('Pryll::AST::Identifier') }
+sub is_static { $_[0]->method->isa('Pryll::AST::Bareword') }
 
 sub _find_primitive_options {
     my ($self, $ctx) = @_;
     my $method = $self->method;
-    return unless $method->isa('Pryll::AST::Identifier');
+    return unless $method->isa('Pryll::AST::Bareword');
     my $name = $method->value;
     return map {
         my $handler = $_->[0]->can("compile_$name");
         $handler
-            ? [$_->[1], $handler->($self, $ctx)]
+            ? [$_->[1], $handler]
             : ();
     } @_primitive;
 }
@@ -76,8 +76,8 @@ sub _compile_method_call {
         chain       => $self->is_chained ? '$' . $v_obj : '',
     );
     my $fail = $self->is_maybe
-        ? 'undef'
-        : "die(q(Invalid method))";
+        ? sub { 'undef' }
+        : sub { sprintf 'die("Method Call Error: " . %s)', pp(shift) };
     return oneline block compose(
         q!
             my %(v_object)  = %(object_expr);
@@ -108,10 +108,10 @@ sub _compile_dynamic_method_call {
                         %(v_nam_arg),
                     )
                 ) :
-            (%(v_m_type) eq 'string')
+            (%(v_m_type) eq 'scalar')
                 ? (do {
                     my %(v_o_type) = %(object_type);
-                    my %(v_pack)   = $Pryll::Core::PRIMPACK{%(v_o_type)};
+                    my %(v_pack)   = $Pryll::Core::_PRIMPACK{%(v_o_type)};
                     my %(v_found)  =
                         defined(%(v_pack))
                         ? (%(v_pack)->can('run_' . %(v_method)))
@@ -124,11 +124,12 @@ sub _compile_dynamic_method_call {
                             %(v_pos_arg),
                             %(v_nam_arg),
                         )) :
-                        %(fail);
+                        %(fail_not_found);
                 }) :
             die("Invalid method type '%(v_m_type)'")
         !,
         %$common,
+        fail_not_found => $fail->('Method not found'),
     );
 }
 
@@ -143,11 +144,11 @@ sub _compile_static_method_call {
         %$common,
         dispatch_static => join(' : ',
             (map {
-                my ($type, $template) = @$_;
+                my ($type, $handler) = @$_;
                 sprintf('(%s eq q(%s)) ? scalar(do { %s })',
                     compose('%(v_o_type)', %$common),
                     $type,
-                    compose($template, %$common),
+                    compose($handler->($self, $ctx), %$common),
                 );
             } @primitives),
             compose(
@@ -165,49 +166,10 @@ sub _compile_static_method_call {
                     })
                 },
                 %$common,
-                fail => $fail,
+                fail => $fail->('Method not found'),
             ),
-            $fail,
+            $fail->('Method not found'),
         ),
-    );
-}
-
-sub ___compile_method_call {
-    my ($self, $ctx) = @_;
-    my @primitive = $self->_find_primitive_options($ctx);
-    return sprintf('(do { %s })', join ';',
-        sprintf('my $obj = %s', $self->invocant->compile($ctx)),
-        sprintf('my $method = %s', $self->_render_method($ctx)),
-        sprintf('my $pos_arg = %s',
-            $self->render_positional_arguments($ctx)),
-        sprintf('my $nam_arg = %s',
-            $self->render_named_arguments($ctx)),
-        sprintf('my $obj_type = %s', typeof('$obj')),
-        sprintf('my $method_type = %s', typeof('$method')),
-
-        @primitive ? (
-            join(' ',
-                (map {
-                    my ($test, $action) = @$_;
-                    sprintf('(%s) ? (do { %s }) :',
-                        compose($test,
-                            ref => '($ref // ref($obj))',
-                        ),
-                        compose($action,
-                            object          => '$obj',
-                            pos_arg         => '$pos_arg',
-                            pos_arg_count   => 'scalar(@$pos_arg)',
-                            nam_arg         => '$nam_arg',
-                        ),
-                    );
-                } @primitive),
-                sprintf('Scalar::Util::blessed(%s) ? %s :',
-                    '$obj',
-                    sprintf('(do { my $m = %s->can($method); %s })',
-                    ),
-                ),
-            ),
-        ) : (),
     );
 }
 
@@ -215,7 +177,7 @@ sub _render_method {
     my ($self, $ctx) = @_;
     my $method = $self->method;
     return pp($method->value)
-        if $method->isa('Pryll::AST::Identifier');
+        if $method->isa('Pryll::AST::Bareword');
     return $method->compile($ctx);
 }
 
