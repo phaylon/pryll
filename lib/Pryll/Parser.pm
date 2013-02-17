@@ -185,6 +185,8 @@ my $_grammar = Marpa::R2::Grammar->new({
         atom ::=
                number       
                 action => ast_number
+            |  T_op_math_low number
+                action => ast_signed_number
             |  T_identifier
                 action => ast_identifier
             |  T_lex_var    
@@ -504,6 +506,15 @@ do {
             location    => $location,
             items       => $list,
         );
+    }
+
+    sub ast_signed_number {
+        my ($data, $sign, $number) = @_;
+        return ast_number($data, [
+            $number->[0],
+            $sign->[1] . $number->[1],
+            $sign->[2],
+        ]);
     }
 
     sub ast_number {

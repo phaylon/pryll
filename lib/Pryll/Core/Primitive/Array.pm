@@ -21,7 +21,49 @@ sub compile_get {
 
 sub compile_has {
     return oneline q!
-        ( $#{ %(v_object) } >= %(v_pos_arg)->[0] ) ? 1 : 0
+        ( $#{ %(v_object) } >= %(v_pos_arg)->[0] ) ? 1 : 0;
+    !;
+}
+
+sub compile_keys {
+    return oneline q!
+        [0 .. $#{ %(v_object) }];
+    !;
+}
+
+sub compile_values {
+    return oneline q!
+        [@{ %(v_object) }];
+    !;
+}
+
+sub compile_copy {
+    return oneline q!
+        [@{ %(v_object) }];
+    !;
+}
+
+sub compile_size {
+    return oneline q!
+        scalar(@{ %(v_object) })
+    !;
+}
+
+sub compile_delete {
+    return oneline q!
+        scalar(splice(@{ %(v_object) }, %(v_pos_arg)->[0], 1));
+    !;
+}
+
+sub compile_shift {
+    return oneline q!
+        shift(@{ %(v_object) });
+    !;
+}
+
+sub compile_unshift {
+    return oneline q!
+        unshift(@{ %(v_object) }, @{ %(v_pos_arg) });
     !;
 }
 
@@ -39,6 +81,31 @@ sub run_get {
 sub run_has {
     my ($array, $pos) = @_;
     return( ($#$array >= $pos->[0]) ? 1 : 0 );
+}
+
+sub run_keys {
+    my ($array, $pos) = @_;
+    return [0 .. $#$array];
+}
+
+sub run_values {
+    my ($array) = @_;
+    return [@$array];
+}
+
+sub run_copy {
+    my ($array) = @_;
+    return [@$array];
+}
+
+sub run_size {
+    my ($array) = @_;
+    return scalar @$array;
+}
+
+sub run_delete {
+    my ($array, $pos) = @_;
+    return scalar splice @$array, $pos->[0], 1;
 }
 
 1;

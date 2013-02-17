@@ -77,10 +77,10 @@ sub cb_attr {
 }
 
 sub test_methods {
-    my ($init, @tests) = @_;
+    my ($group_title, $init, @tests) = @_;
     return map {
         my ($title, $method, $append, $expected) = @$_;
-        ["method $title",
+        ["$group_title method $title",
          "my \$obj = $init; \$obj.$method$append",
          $expected,
         ];
