@@ -42,6 +42,8 @@ test_all('arrays', $_test_ok,
         ['.get', 'get', '(1)', 3],
         ['.set', 'set', '(1, 7); $obj', [2, 7, 4]],
         ['.set return', 'set', '(1, 7)', '7'],
+        ['.has true', 'has', '(1)', 1],
+        ['.has false', 'has', '(3)', 0],
     ),
 );
 
