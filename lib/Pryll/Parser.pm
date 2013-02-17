@@ -48,6 +48,8 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_method
             |  expression T_op_method method
                 action => ast_method
+            || slot
+                action => passthrough
             || assignable T_op_step
                 action => ast_unop_post
                 assoc => left
@@ -78,6 +80,9 @@ my $_grammar = Marpa::R2::Grammar->new({
                 action => ast_binop
             || expression T_op_or_low expression
                 action => ast_binop
+
+        slot ::= expression T_brack_left expression T_brack_right
+            action => ast_slot
 
         method_call_maybe ::= T_op_qmark | nothing
 
@@ -143,11 +148,11 @@ my $_grammar = Marpa::R2::Grammar->new({
 
         method ::= variable | bareword
 
-        assignable ::= variable
+        assignable ::= variable | slot
 
         arguments ::= argument_item*
             separator => T_op_list_sep
-            action => ast_list
+            action => ast_arguments
 
         argument_item ::= named_item | list_item
 
@@ -322,6 +327,8 @@ do {
     package Pryll::Parser::Actions;
     use Safe::Isa;
 
+    sub passthrough { $_[1] }
+
     sub ast_list {
         my ($data, @items) = @_;
         return \@items;
@@ -335,6 +342,13 @@ do {
     sub ast_trait_arguments {
         my ($data, $l_op, $arguments, $r_op) = @_;
         return $arguments;
+    }
+
+    sub ast_arguments {
+        my ($data, @arguments) = @_;
+        return Arguments->$_new_ast(
+            items       => \@arguments,
+        );
     }
 
     sub ast_trait {
@@ -506,6 +520,16 @@ do {
             location => $location,
             value    => $expr,
         );
+    }
+
+    sub ast_slot {
+        my ($self, $item, $l_op, $slot, $r_op) = @_;
+        my ($type, $value, $location) = @$l_op;
+        return Slot->$_new_ast(
+            location    => $location,
+            object      => $item,
+            slot        => $slot,
+        );;
     }
 
     sub ast_lex_var {

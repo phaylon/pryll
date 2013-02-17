@@ -13,9 +13,13 @@ sub parts { @{ $_[0]->_parts_ref } }
 
 sub compile {
     my ($self, $ctx) = @_;
-    return sprintf(
-        '(do { no warnings qw( void ); %s })',
-        join('; ', map $_->compile($ctx), $self->parts),
+    return sprintf('(do { %s })',
+        join('; ',
+            'no warnings qw(void)',
+            'require Scalar::Util',
+            'require Pryll::Core',
+            (map $ctx->compile_statement($_), $self->parts),
+        ),
     );
 }
 

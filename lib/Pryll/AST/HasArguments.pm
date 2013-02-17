@@ -3,12 +3,36 @@ use strictures 1;
 package Pryll::AST::HasArguments;
 use Moo::Role;
 
-has _arguments_ref => (
+use aliased 'Pryll::AST::Arguments';
+
+has arguments => (
     is          => 'ro',
-    init_arg    => 'arguments',
-    default     => sub { [] },
+    coerce      => sub {
+        my ($value) = @_;
+        return Arguments->new(items => $value)
+            if ref($value) eq 'ARRAY';
+        return $value;
+    },
 );
 
-sub arguments { @{ $_[0]->_arguments_ref } }
+sub _render_positional_arguments {
+    my ($self, $ctx) = @_;
+    return sprintf('(%s)', join '||',
+        $self->arguments
+            ? $self->arguments->compile_positional($ctx)
+            : (),
+        '[]',
+    );
+}
+
+sub _render_named_arguments {
+    my ($self, $ctx) = @_;
+    return sprintf('(%s)', join '||',
+        $self->arguments
+            ? $self->arguments->compile_named($ctx)
+            : (),
+        '{}',
+    );
+}
 
 1;

@@ -9,36 +9,19 @@ has name => (is => 'ro', required => 1);
 
 sub compile {
     my ($self, $ctx) = @_;
-    return $self->render_storage;
+    $ctx->ensure_known_lexical($self->name);
+    return $ctx->render_lexical($self->name);
 }
 
 sub compile_assign {
     my ($self, $ctx, $expr) = @_;
-    return sprintf('scalar(undef(%s), %s = %s)',
-        $self->render_typecache,
-        $self->render_storage,
-        $expr->compile($expr),
-    );
+    $ctx->ensure_known_lexical($self->name);
+    return $ctx->render_lexical_assign($self->name, $expr);
 }
 
 sub compile_declare {
     my ($self, $ctx, $init_expr) = @_;
-    my $init = $init_expr ? $init_expr->compile($ctx) : 'undef';
-    return sprintf('scalar(my %s, my %s = %s)',
-        $self->render_typecache,
-        $self->render_storage,
-        $init,
-    );
-}
-
-sub render_typecache {
-    my ($self) = @_;
-    return join '_', '$lextype', $self->name;
-}
-
-sub render_storage {
-    my ($self) = @_;
-    return join '_', '$lexdata', $self->name;
+    return $ctx->render_lexical_declare($self->name, $init_expr);
 }
 
 1;
