@@ -1,0 +1,725 @@
+=head1 DESIGN
+
+=head2 General Syntax
+
+=head3 Short notes
+
+=over
+
+=item *
+
+Everything is in scalar context.
+
+=item *
+
+The C<$> sigil is the only sigil for lexical variables.
+
+=item *
+
+Methods are called with C<.>.
+
+=item *
+
+Methods can be called on everything.
+
+=item *
+
+There are no warnings. Only errors. At least in this iteration.
+
+=back
+
+=head3 Statements
+
+In Pryll, every statement needs to be terminated with a semicolon. It
+doesn't matter if it's an expression, a syntax element, or anything block
+like. This also means that every part of the syntax can be part of an
+expression.
+
+=head3 Lexicals
+
+    # declarations
+    my $foo;
+    my $foo = 23;
+    my $foo :weak = foo();
+
+    # scoped declarations
+    let $x { ... };
+    let $x = 23 { ... };
+    let $x = 23, $y = 17 { ... };
+    let $x, $y { ... };
+
+=head3 Modules
+
+    ## lib/Foo/Bar.pry
+
+    # this function is outside the exportable scope
+    function _log($msg) {
+        say($msg);
+        return true;
+    };
+
+    module Foo::Bar {
+
+        # this function can be imported
+        function double($n) {
+            return $n * 2;
+        };
+
+        # you can use "private" functions
+        function log_info($msg) {
+            return _log('[info] ' ~ $msg);
+        };
+    };
+
+    ## importing module functions
+    use Foo::Bar import double, log_info;
+    log_info(double(23));
+
+    ## importing aliased module functions
+    use Foo::Bar import double as calc, log_info as log;
+    log(calc(23));
+
+    ## module function dispatch
+    use Foo::Bar;
+    Foo::Bar.log_info(Foo::Bar.double(23));
+
+    ## module function dispatch with alias
+    use Foo::Bar as Mod;
+    Mod.log_info(Mod.double(23));
+
+=head3 Roles and Classes
+
+    ## lib/Display.pry
+
+    # a private function, not available from the outside
+    function _id($attr) {
+        return '%(name): %(value)'.format(
+            name:  $attr.name,
+            value: $attr.get_value,
+        );
+    };
+
+    role Display(:$prefix = '') {
+        # method required with empty signature
+        requires get_display_string();
+
+        method display() {
+            # produce a string
+            say('%(prefix)[%(id)] %(string)'.format(
+                # role parameter
+                prefix: $prefix,
+                # meta class information
+                id:     _id($self.^find_attribute_by_tag('id').first),
+                # call a method on our $self
+                string: $self.get_display_string,
+            ));
+        };
+    };
+
+    ## lib/User.pry
+
+    # placeholder, only for names, cannot be instantiated
+    class User::Role::Admin;
+
+    class User extends Some::Base {
+
+        # tagged attributes
+        has $username :ro, :required, :init, :tag('id');
+        has $password :ro, :required, :init, :tag('hidden');
+
+        # defaults
+        has $roles :ro, :init, :lazy = [];
+
+        method get_display_string() { return 'User Object' };
+
+        # composed exactly here
+        does Display(prefix: 'User: ');
+
+        # static class methods can create objects
+        static new_for_test() {
+            return $class(username: 'Foo', password: 'Bar');
+        };
+
+        # .contains can match classes
+        method is_admin() {
+            return $roles.contains(User::Role::Admin);
+        };
+
+        # initialization
+        on build (:$username) {
+            say('building %(user)'.format(user: $username));
+        };
+    
+        # destruction
+        on destroy {
+            say('destroying %(user)'.format(user: $username);
+        };
+
+        # alternate constructor signatures
+        on buildargs ($username) {
+            return { username: $username };
+        };
+    };
+
+    ## calling static methods
+    my $obj = User.new_for_test;
+
+    ## calling the constructor
+    my $obj = User(username: 'Foo', password: 'Bar');
+
+    ## checking for a role
+    if $obj ~~ Display {
+        $obj.display();
+    };
+
+    ## checking for the class
+    if $obj ~~ User {
+        say('User: ' ~ $obj.username);
+    };
+
+=head3 Function Definitions
+
+    # simple function definition
+    function fname($arg1, $arg2) {
+        # explicit return required or undef is returned
+        return $arg1 + $arg2;
+    };
+
+    # lambda expression
+    my $func = lambda ($arg1, $arg2) {
+        return $arg1 + $arg2;
+    };
+
+    # single expression shortcut
+    my $func = => ($n, $m) $n + $m;
+
+    # without signature
+    my $idx  = 0;
+    my $iter = => $idx++;
+
+    # single argument expression shortcut ($_ is a normal lexical)
+    my $func = -> $_ * 2;
+
+=head3 Signatures and Arguments
+
+    # empty signature
+    function foo() { ... };
+
+    # required positional argument
+    function foo($x) { ... };
+
+    # optional positional agument
+    function foo($x?) { ... };
+
+    # positional argument with default is automatically optional
+    function foo($x = 23) { ... };
+
+    # defaults are evaluated on function entry
+    function foo($x = []) { ... };
+
+    # weaken local reference to positional
+    function foo($x :weak) { ... };
+
+    # mixed
+    # optional positional have to come after required ones
+    function foo($a, $b :weak, $c = 23, $d?, $e :weak = 7) { ... };
+
+    # required named argument
+    function foo(:$x) { ... };
+
+    # optional named argument
+    function foo(:$x?) { ... };
+
+    # named argument with default is automatically optional
+    function foo(:$x = 23) { ... };
+
+    # weaken local reference to named
+    function foo(:$x :weak) { ... };
+
+    # mixed
+    function foo(:$a, :$b :weak, :$c = 23, :$d?, :$e :weak = 7) { ... };
+
+    # mixing positional and named arguments
+    # named have to come after positionals
+    function foo($a, $b?, :$c, :$d?) { ... };
+
+    # rest of named arguments
+    # rest will be a hash in $rest
+    function foo(:$a, :$b, %$rest) { ... };
+
+    # rest of positional arguments
+    # rest will be an array in $rest
+    function foo($a, $b, @$rest) { ... };
+
+    # both kinds of rest parameters
+    function foo($a, :$b, @$rest_npos, %$rest_named) { ... };
+
+    # inline trait
+    function foo(...) :inline { ... };
+
+    # calling a function
+    foo(2, 3);
+
+    # splicing in positionals from an array
+    foo(2, @$args, 3);
+
+    # splicing in named arguments from a hash
+    foo(x: 23, %$args);
+
+=head3 Function Calls
+
+    # call
+    foo;
+    foo();
+    foo(2, 3);
+
+    # function reference
+    my $ref = &foo;
+
+    # curried function reference
+    my $ref = &foo(2, 3);
+
+    # calling a reference
+    $ref(23);
+    $ref.call(23);
+
+    # curry method
+    my $curried = $ref.curry(23);
+
+=head3 Method Calls
+
+    # call
+    $obj.foo;
+    $obj.foo();
+    $obj.foo(2, 3);
+
+    # method reference
+    my $ref = $obj.&foo;
+
+    # curried method reference
+    my $ref = $obj.&foo(2, 3);
+
+    # calling method references
+    $ref(23);
+    $ref.call(23);
+
+    # curry method
+    $ref.curry(23);
+
+    # optional method calls, return undef if method doesn't exist
+    $obj.foo?;
+    $obj.foo?(2, 3);
+
+    # optional method reference
+    $obj.&foo?;
+
+    # optional curried method reference
+    $obj.&foo?(2, 3);
+
+    # chained method calls, forces return of invocant
+    $obj.foo!.bar;
+    $obj.foo!(2, 3).bar(2, 3);
+
+    # optional chained, foo only called if it exists
+    $obj.foo?!.bar;
+    $obj.foo?!(2, 3).bar(2, 3);
+
+    # dynamic method calls
+    # strings call method, objects are .call($invocant)'ed
+    $obj.$foo;
+    $obj.$foo(23);
+    $obj.$foo?(23);
+    $obj.$foo!(23).bar(17);
+
+    # dynamic method refs
+    # method objects will be curried with $obj as first arg
+    $obj.&$foo;
+    $obj.&$foo(2, 3);
+    $obj.&$foo?;
+
+=head3 Control Flow
+
+    # if conditions are expressions
+    my $result = if $x { 23 } else { 17 };
+
+    # if/unless is stackable
+    if $x { 23 } else unless $y { 17 } else { 99 };
+
+    # given scopes its argument as $_
+    given 23 { say($_) };
+
+    # exception handling
+    my $result = try as EXPLODE {
+        if rand(10) > 5 {
+            Exception::Random.throw();
+        }
+        Exception::Always.throw();
+    }
+    catch (Exception::Always $e) {
+        say('nothing random happened');
+    }
+    catch (Exception::random $e) {
+        say('a random event occured');
+        retry EXPLODE;
+    }
+    finally {
+        say('done');
+    };
+
+=head3 Perl 5 Libraries
+
+    ## classes
+    use DBI :perl5class;
+    my $dbh = DBI.connect('dbi:Pg:dbname=foo', undef, undef, {
+        RaiseError: true,
+        PrintError: false,
+    });
+
+    ## modules
+    use JSON::XS :perl5mod import encode_json, decode_json;
+    say(encode_json({ foo: 23 }));
+
+=head2 Data Types
+
+=head3 Undefined
+
+    # the undef function
+    my $value = undef;
+
+    # the defined function
+    defined($value);
+
+    # matches only undefined
+    undef.matches($value);
+    $value ~~ undef;
+
+=head3 Boolean
+
+Booleans are handled like they are in Perl 5. the functions C<true> and
+C<false> are available for documentative purposes. They will return or
+inline to C<1> and C<0>.
+
+=head3 Array
+
+    # creating an array
+    my $foo = [2, 3, 4];
+
+    # creating an empty array
+    my $foo = [];
+
+    # splicing another array
+    my $foo = [2, 3, @$bar, 4];
+
+    # accessing a slot, these compile to the same code
+    $foo[2];
+    $foo.get(2);
+
+    # setting a slot, these compile to the same code
+    $foo[3] = 5;
+    $foo.set(3, 5);
+
+    # combine two arrays
+    my $new = [2, 3] ~ [4, 5];
+    my $new = [2, 3].concat([4, 5]);
+
+    # sequence operations
+    $array.push(@$items);
+    $array.pop;
+    $array.unshift(@$items);
+    $array.shift;
+    $array.first;
+    $array.first($func_1);
+    $array.last;
+    $array.last($func_1);
+
+    # set operations
+    $array.count;
+    $array.count($func_1);
+    $array.contains($func_1);
+
+    # sorting
+    $array.sort;
+    $array.sort($func_2);
+
+    # streams
+    $array.map($func_1);
+    $array.grep($func_1);
+    $array.reduce($func_2);
+
+    # map operations
+    $array.get($index);
+    $array.set($index, $value);
+    $array.has($index);
+    $array.keys;
+    $array.values;
+    $array.delete($index);
+    $array.each($func_2);
+    $array.pairs;
+
+    # copying
+    $array.copy;
+
+    # repeat
+    $array.repeat($count);
+
+    # string centric
+    $array.joined($separator);
+    $array.min_str;
+    $array.max_str;
+
+    # number centric
+    $array.min;
+    $array.max;
+    $array.sum;
+
+    # unique items
+    $array.unique;
+    $array.unique($func_1);
+
+    # reverse
+    $array.reversed;
+
+    # slice
+    $array.slice(@$indices);
+    $array.range($start, $end);
+
+=head3 Hash
+
+    # creating a hash
+    my $foo = { x: 17, y: 23 };
+
+    # creating an empty hash
+    my $foo = {};
+
+    # splicing another hash
+    my $foo = { x: 23, %$bar, y: 17 };
+
+    # accessing a slot, these compile to the same code
+    $foo['bar'];
+    $foo.get('bar');
+
+    # setting a slot, these compile to the same code
+    $foo['bar'] = 5;
+    $foo.set('bar', 5);
+
+    # combine two hashes
+    my $new = { x: 23 } ~ { y: 17 };
+    my $new = { x: 23 }.concat({ y: 17 }=);
+
+    # set operations
+    $hash.count;
+    $hash.count($func_1);
+    $hash.contains($func_1);
+
+    # streams
+    $hash.map($func_1);
+    $hash.grep($func_1);
+
+    # map operations
+    $hash.get($index);
+    $hash.set($index, $value);
+    $hash.has($index);
+    $hash.keys;
+    $hash.values;
+    $hash.delete($index);
+    $hash.each($func_2);
+    $hash.pairs;
+
+    # copying
+    $hash.copy;
+
+    # reverse
+    $hash.reversed;
+
+    # slice
+    $hash.slice(@$keys);
+
+=head3 Scalar
+
+    # integers
+    my $pos = 23;
+    my $neg = -23;
+    my $sep = 23_500_000;
+
+    # floats
+    my $pos = 23.5;
+    my $neg = -23.5;
+    my $sep = 23_500.000_500;
+
+    # strings
+    my $string  = "foo\nbar";
+    my $literal = 'foo bar';
+
+    # repeat
+    $scalar.repeat(23);
+
+    # joined
+    $scalar.join(@$items);
+
+    # trimmed
+    $scalar.trimmed(left: true, right: true);
+
+    # splitting
+    $scalar.split($pattern);
+    $scalar.split($pattern, $limit);
+
+    # replacing
+    $scalar.replace($pattern, $replacement);
+    $scalar.replace_all($pattern, $replacement);
+
+    # formatting
+    'Number: %(x)'.format(x: 23);
+
+    # length
+    $string.length;
+
+    # math
+    $number.add(23);
+    $number.subtract(17);
+    $number.divide(2);
+    $number.multiply(8);
+
+    # ranges
+    $number.up_to(23);
+    $number.down_to(0);
+
+    # counter
+    $number.increase;
+    $number.decrease;
+
+    # reverse
+    $string.reversed;
+
+    # matches
+    $string.matches($other);
+    $other ~~ $string;
+
+=head3 Function Reference
+
+    # call function
+    $func.call;
+    $func.call(2, 3, x: 23);
+
+    # currying
+    $func.curry(2, 3);
+    $func.rcurry(2, 3);
+
+    # mangle return value
+    $func.mangled(-> $_ * 2);
+
+    # match for true value
+    $func.matches($obj);
+    $obj ~~ $func;
+
+=head3 Class
+
+    # instantiate
+    $class();
+    $class(2, 3, x: 18);
+    $class.call(2, 3);
+
+    # currying
+    $class.curry(2, 3);
+
+    # match is-a
+    Foo::Bar.matches($obj);
+    $obj ~~ Foo::Bar;
+
+    # mangled construction
+    my $mangled_class = $class.mangled(-> Wrapper(object: $_));
+    my $wrapped = $mangled_class();
+
+=head3 ClassName
+
+    # create class name
+    class Foo::Bar;
+
+    # load class
+    Foo::Bar.load;
+
+    # match is-a
+    Foo::Bar.matches($obj);
+    $obj ~~ Foo::Bar;
+
+=head3 Role
+
+    # match does
+    Foo.matches($obj);
+    $obj ~~ Foo;
+
+=head3 RoleName
+
+    # create a role name
+    role Foo;
+
+    # match does
+    Foo.matches($obj);
+    $obj ~~ Foo;
+
+=head2 Operators
+
+Binary operator method call dispatches can receive a C<reverse> named
+argument indicating that the object was in second position.
+
+    # method calls
+    $obj.$method
+
+    # counting
+    $obj++          # calls .increase
+    $obj--          # calls .decrease
+
+    # math
+    $a + $b
+    $a - $b
+    $a * $b
+    $a / $b
+
+    # concatenation calls $a.concat($b)
+    $a ~ $b
+
+    # logical
+    !$expr
+    not $expr
+    $a and $b
+    $a or $b
+    $a && $b
+    $a || $b
+    $a // $b
+
+    # comparisons
+    $a < $b     $a > $b
+    $a <= $b    $a >= $b
+    $a lt $b    $a gt $b
+    $a le $b    $a ge $b
+    $a == $b
+    $a eq $b
+    $a <=> $b
+    $a cmp $b
+    $a min $b   $a max $b
+
+    # matching calls $b.matches($a)
+    $a ~~ $b
+
+    # calling invokes .call
+    $expr(...)
+
+    # slot access invokes .get or .set
+    $expr[0]
+    $expr[0] = 23;
+
+=head2 Global Variables
+
+These cannot be assigned to. Some can be modified in a dynamic scope.
+
+    $*ENV
+    $*ARGV
+    $*PID
+    $*FIlE
+    $*LINE
+    $*NAMESPACE
+    $*SUB
+    $*IN
+    $*OUT
+    $*ERR
+
+=cut
