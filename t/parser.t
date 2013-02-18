@@ -122,7 +122,7 @@ sub cb_method {
             cb_attr(invocant    => $inv),
             cb_attr(symbol      => cb_is($op)),
             cb_attr(method      => $method),
-            cb_attr(arguments   => @args),
+            cb_attr(arguments   => cb_attr(items => @args)),
         ),
     );
 }
@@ -154,7 +154,7 @@ sub cb_trait {
         'AST::Trait',
         cb_all(
             cb_attr(name => cb_is($name)),
-            cb_attr(arguments => @args),
+            cb_attr(arguments => cb_attr(items => @args)),
         ),
     );
 }
